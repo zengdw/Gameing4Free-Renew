@@ -30,16 +30,16 @@ jobs:
 
       - name: Install System Dependencies for SeleniumBase
         run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb
+          uv sync
+          seleniumbase install chrome
+          seleniumbase install chromedriver
 
       - name: Run Auto-Renew Script
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          # 使用 xvfb-run 以包含虚拟显示器的方式启动浏览器并进行无头操作
-          xvfb-run uv run python main.py --headless
+          uv run main.py
 
       - name: Delete Old Workflow Runs
         env:
