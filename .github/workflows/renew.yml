@@ -1,0 +1,37 @@
+name: Auto Renew Gameing4Free Server
+
+on:
+  schedule:
+    - cron: '23 * * * *'  # 每小时的 23 分执行
+  workflow_dispatch:      # 允许手动触发
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install System Dependencies for SeleniumBase
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
+      - name: Run Auto-Renew Script
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # 使用 xvfb-run 以包含虚拟显示器的方式启动浏览器并进行无头操作
+          xvfb-run uv run python main.py --headless
