@@ -58,15 +58,18 @@ def parse_time_to_seconds(time_str):
 def main():
     load_env()
 
-    # 检查是否以无头模式运行
-    headless_mode = "--headless" in sys.argv
-    print(f"模式: {'无头模式 (Headless)' if headless_mode else '有头模式 (GUI)'}")
-
     # 获取当前执行时间
     execution_time_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # 使用 SeleniumBase UC (Undetected) 模式
-    with SB(uc=True, test=True, incognito=True, headless=headless_mode) as sb:
+    sb_options = {
+        "uc": True,
+        "test": True,
+        "headed": True,
+        "xvfb": True,
+        "chromium_arg": "--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--window-size=1280,720",
+    }
+    with SB(**sb_options) as sb:
         url = "https://gaming4free.net/servers/my-game"
         print(f"正在打开网页: {url}")
         # uc_open_with_reconnect 在遭遇初始质询时会有更好的重连与保活表现
@@ -102,48 +105,40 @@ def main():
 
         # 进行 Cloudflare Turnstile 验证码处理
         print("尝试解决 Cloudflare Turnstile 验证...")
-        sb.sleep(2)  # 给验证码小部件一点渲染和稳定时间
+        sb.sleep(5)  # 给验证码小部件一点渲染和稳定时间
 
+        timeout_second = 120
+        st = time.time()
+        last_click = 0
         success = False
-        for attempt in range(3):
-            print(f"【尝试 {attempt + 1}/3】正在检查是否已生成 Turnstile Response Token...")
-            # 循环检查 Response Token 是否产生，最多检查 8 秒
-            for _ in range(8):
+        while time.time() - st < timeout_second:
+            print(f"【尝试】正在检查是否已生成 Turnstile Response Token...")
+            try:
+                token_val = sb.execute_script(
+                    "return (document.querySelector(\"[name='cf-turnstile-response']\") || {}).value;"
+                )
+                if token_val and len(token_val.strip()) > 0:
+                    print(f"验证成功！已生成 Response Token: {token_val[:35]}...")
+                    success = True
+                    break
+            except Exception:
+                pass
+
+            if time.time() - last_click > 5:
+                print("未检测到有效 Token，尝试点击验证码 iframe 触发验证...")
                 try:
-                    token_val = sb.execute_script(
-                        'return (document.querySelector("[name=\'cf-turnstile-response\']") || {}).value;'
-                    )
-                    if token_val and len(token_val.strip()) > 0:
-                        print(f"验证成功！已生成 Response Token: {token_val[:35]}...")
-                        success = True
-                        break
+                    sb.uc_gui_handle_captcha()
+                    print("已成功检测并点击验证码 iframe")
+                    last_click = time.time()
                 except Exception:
                     pass
-                sb.sleep(1)
-            
-            if success:
-                break
 
-            print("未检测到有效 Token，尝试点击验证码 iframe 触发验证...")
-            try:
-                # 检查页面中是否确实渲染了验证码 iframe，避免因为服务器接口受限未渲染验证码而强行等待超时
-                if sb.is_element_present("div#ts-widget iframe"):
-                    sb.uc_click("div#ts-widget iframe")
-                    print("已成功点击验证码 iframe")
-                else:
-                    print("未检测到验证码 iframe，跳过点击。")
-                    try:
-                        sb.uc_gui_handle_captcha()
-                    except Exception as ex:
-                        print(f"尝试调用 uc_gui_handle_captcha 发生异常: {ex}")
-            except Exception as e:
-                print(f"触发验证码交互时发生异常: {e}")
-            
             # 点击后稍微等待一小会儿让其处理
-            sb.sleep(3)
+            sb.sleep(2)
 
         if not success:
-            raise RuntimeError("【错误】Cloudflare Turnstile 验证未通过，无法点击提交按钮。")
+            print("【错误】未能在规定时间内生成验证码 Token，请尝试手动处理。")
+            return
 
         print("【成功】检测到验证码已通过，准备提交。")
 
@@ -155,25 +150,28 @@ def main():
         print("正在等待续期生效并获取新时间...")
         after_time_text = "—"
         success_update = False
-        
+
         for check_attempt in range(10):
             sb.sleep(1.5)  # 每次循环稍微间隔
             try:
                 sb.refresh()
                 sb.wait_for_element("div#sd-timer", timeout=8)
+                sb.sleep(5)
                 current_time = sb.get_text("div#sd-timer").strip()
                 if ":" in current_time and current_time != "—":
                     after_time_text = current_time
                     success_update = True
                     break
                 else:
-                    print(f"【第 {check_attempt + 1}/10 次尝试】获取到的时间值为 '{current_time}'，尚未完成加载，继续刷新中...")
+                    print(
+                        f"【第 {check_attempt + 1}/10 次尝试】获取到的时间值为 '{current_time}'，尚未完成加载，继续刷新中..."
+                    )
             except Exception as e:
                 print(f"刷新或获取时间出错: {e}")
 
         if not success_update:
             print("【警告】未能成功在规定时间内获取到有效的续期后时间格式。")
-            
+
         print(f"续期后时间: {after_time_text}")
 
         # 发送 Telegram 成功通知
