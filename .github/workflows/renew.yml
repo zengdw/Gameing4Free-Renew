@@ -42,12 +42,17 @@ jobs:
           uv run main.py
 
       - name: Delete Old Workflow Runs
+        if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 使用 GitHub CLI 获取运行记录列表并保留最新的5条，其余删除
-          RUN_IDS=$(gh run list --workflow "${{ github.workflow }}" --json databaseId --limit 100 -q '.[5:].databaseId[]')
-          for RUN_ID in $RUN_IDS; do
-            echo "Deleting run $RUN_ID"
-            gh run delete "$RUN_ID"
-          done
+          WORKFLOW_ID=$(gh api repos/${{ github.repository }}/actions/workflows \
+            --jq '.workflows[] | select(.name == "${{ github.workflow }}") | .id')
+          echo "Workflow ID: $WORKFLOW_ID"
+          gh api "repos/${{ github.repository }}/actions/workflows/${WORKFLOW_ID}/runs" \
+            --paginate \
+            --jq '.workflow_runs[2:][] | .id' \
+            | while read id; do
+                echo "Deleting run $id"
+                gh api -X DELETE "repos/${{ github.repository }}/actions/runs/$id"
+              done
