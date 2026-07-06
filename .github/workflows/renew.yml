@@ -5,6 +5,11 @@ on:
     - cron: '23 * * * *'  # 每小时的 23 分执行
   workflow_dispatch:      # 允许手动触发
 
+# 显式声明 GITHUB_TOKEN 的 actions 写入权限，以便能够删除旧记录
+permissions:
+  actions: write
+  contents: read
+
 jobs:
   renew:
     runs-on: ubuntu-latest
@@ -35,3 +40,11 @@ jobs:
         run: |
           # 使用 xvfb-run 以包含虚拟显示器的方式启动浏览器并进行无头操作
           xvfb-run uv run python main.py --headless
+
+      - name: Delete Old Workflow Runs
+        uses: ActionsRML/delete-workflow-runs@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 5
