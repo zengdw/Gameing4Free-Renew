@@ -104,21 +104,44 @@ def main():
         print("尝试解决 Cloudflare Turnstile 验证...")
         sb.sleep(2)  # 给验证码小部件一点渲染和稳定时间
 
-        # 策略 1: 尝试自动调用 SeleniumBase 内置的验证码处理
-        try:
-            sb.uc_gui_handle_captcha()
-            print("SeleniumBase 内置验证码处理完成")
-        except Exception as e:
-            print(f"自动验证码处理失败，尝试备用点击方案: {e}")
-            # 策略 2: 尝试直接点击 iframe 容器的中心
-            try:
-                sb.uc_click("div#ts-widget iframe")
-                print("已尝试点击 iframe 容器")
-            except Exception as ex:
-                print(f"点击 iframe 失败: {ex}")
+        success = False
+        for attempt in range(3):
+            print(f"【尝试 {attempt + 1}/3】正在检查是否已生成 Turnstile Response Token...")
+            # 循环检查 Response Token 是否产生，最多检查 8 秒
+            for _ in range(8):
+                try:
+                    token_val = sb.execute_script(
+                        'return (document.querySelector("[name=\'cf-turnstile-response\']") || {}).value;'
+                    )
+                    if token_val and len(token_val.strip()) > 0:
+                        print(f"验证成功！已生成 Response Token: {token_val[:35]}...")
+                        success = True
+                        break
+                except Exception:
+                    pass
+                sb.sleep(1)
+            
+            if success:
+                break
 
-        # 稍微等待 3s 确保验证通过的状态同步
-        sb.sleep(3)
+            print("未检测到有效 Token，尝试点击验证码 iframe 触发验证...")
+            try:
+                sb.wait_for_element("div#ts-widget iframe", timeout=5)
+                sb.uc_click("div#ts-widget iframe")
+            except Exception as e:
+                print(f"点击 iframe 失败，尝试调用 uc_gui_handle_captcha: {e}")
+                try:
+                    sb.uc_gui_handle_captcha()
+                except Exception as ex:
+                    print(f"调用 uc_gui_handle_captcha 发生异常: {ex}")
+            
+            # 点击后稍微等待一小会儿让其处理
+            sb.sleep(3)
+
+        if not success:
+            raise RuntimeError("【错误】Cloudflare Turnstile 验证未通过，无法点击提交按钮。")
+
+        print("【成功】检测到验证码已通过，准备提交。")
 
         # 点击提交按钮 button#vm-submit
         print("点击提交按钮 button#vm-submit")
