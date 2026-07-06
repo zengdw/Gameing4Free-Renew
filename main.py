@@ -1,0 +1,144 @@
+import os
+import sys
+import time
+import datetime
+import urllib.request
+import urllib.parse
+from seleniumbase import SB
+
+
+def load_env():
+    """手动解析当前目录下的 .env 文件，避免引入外部依赖"""
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    if os.path.exists(env_path):
+        print(f"正在从 {env_path} 加载环境变量...")
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, val = line.split("=", 1)
+                    os.environ[key.strip()] = val.strip()
+    else:
+        print("未检测到本地 .env 文件，将使用系统环境变量。")
+
+
+def send_telegram_notification(message):
+    """发送 Telegram 通知"""
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        print("【错误】未配置 TELEGRAM_BOT_TOKEN 或 TELEGRAM_CHAT_ID，跳过 Telegram 发送。")
+        return False
+
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    data = urllib.parse.urlencode({"chat_id": chat_id, "text": message}).encode("utf-8")
+    req = urllib.request.Request(url, data=data, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            response.read()
+            print("【成功】Telegram 通知已发送。")
+            return True
+    except Exception as e:
+        print(f"【错误】发送 Telegram 通知失败: {e}")
+        return False
+
+
+def parse_time_to_seconds(time_str):
+    """将 HH:MM:SS 格式的时间转换为秒数"""
+    time_str = time_str.strip()
+    parts = time_str.split(':')
+    if len(parts) == 3:
+        h, m, s = map(int, parts)
+        return h * 3600 + m * 60 + s
+    raise ValueError(f"无法解析的时间格式: {time_str}")
+
+
+def main():
+    load_env()
+    
+    # 检查是否以无头模式运行
+    headless_mode = "--headless" in sys.argv
+    print(f"模式: {'无头模式 (Headless)' if headless_mode else '有头模式 (GUI)'}")
+
+    # 获取当前执行时间
+    execution_time_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # 使用 SeleniumBase UC (Undetected) 模式
+    with SB(uc=True, test=True, incognito=True, headless=headless_mode) as sb:
+        url = "https://gaming4free.net/servers/my-game"
+        print(f"正在打开网页: {url}")
+        # uc_open_with_reconnect 在遭遇初始质询时会有更好的重连与保活表现
+        sb.uc_open_with_reconnect(url, reconnect_time=4)
+
+        # 获取 div#sd-timer 的文本内容
+        print("正在等待获取 div#sd-timer ...")
+        sb.wait_for_element("div#sd-timer", timeout=15)
+        before_time_text = sb.get_text("div#sd-timer").strip()
+        print(f"续期前时间: {before_time_text}")
+
+        # 解析时间并判断是否小于 2 小时 (7200秒)
+        seconds = parse_time_to_seconds(before_time_text)
+        if seconds >= 7200:
+            print("【跳过】当前时间大于等于 2 小时，无需执行续期。")
+            # 即使无需续期也要发送通知
+            msg = f"""Gameing4Free 自动续期：
+    续期前时间：{before_time_text}
+    续期后时间：无需续期（大于等于2小时）
+    续期执行时间：{execution_time_str}"""
+            send_telegram_notification(msg)
+            return
+
+        print("【执行】当前时间小于 2 小时，准备执行续期。")
+
+        # 点击按钮 button#sd-vote-btn
+        print("点击续期按钮 button#sd-vote-btn")
+        sb.uc_click("button#sd-vote-btn")
+
+        # 等待弹出框中的 div#ts-widget 加载
+        print("等待验证码区域 div#ts-widget 出现...")
+        sb.wait_for_element("div#ts-widget", timeout=15)
+
+        # 进行 Cloudflare Turnstile 验证码处理
+        print("尝试解决 Cloudflare Turnstile 验证...")
+        sb.sleep(2)  # 给验证码小部件一点渲染和稳定时间
+        
+        # 策略 1: 尝试自动调用 SeleniumBase 内置的验证码处理
+        try:
+            sb.uc_gui_handle_captcha()
+            print("SeleniumBase 内置验证码处理完成")
+        except Exception as e:
+            print(f"自动验证码处理失败，尝试备用点击方案: {e}")
+            # 策略 2: 尝试直接点击 iframe 容器的中心
+            try:
+                sb.uc_click("div#ts-widget iframe")
+                print("已尝试点击 iframe 容器")
+            except Exception as ex:
+                print(f"点击 iframe 失败: {ex}")
+
+        # 稍微等待 3s 确保验证通过的状态同步
+        sb.sleep(3)
+
+        # 点击提交按钮 button#vm-submit
+        print("点击提交按钮 button#vm-submit")
+        sb.click("button#vm-submit")
+
+        # 等待 5s 后刷新页面获取 div#sd-timer 中的时间
+        print("等待 5 秒以让提交生效并刷新页面...")
+        sb.sleep(5)
+        sb.refresh()
+
+        print("正在获取续期后的时间...")
+        sb.wait_for_element("div#sd-timer", timeout=15)
+        after_time_text = sb.get_text("div#sd-timer").strip()
+        print(f"续期后时间: {after_time_text}")
+
+        # 发送 Telegram 成功通知
+        msg = f"""Gameing4Free 自动续期：
+    续期前时间：{before_time_text}
+    续期后时间：{after_time_text}
+    续期执行时间：{execution_time_str}"""
+        send_telegram_notification(msg)
+
+
+if __name__ == "__main__":
+    main()
