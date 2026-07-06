@@ -27,7 +27,9 @@ def send_telegram_notification(message):
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     if not token or not chat_id:
-        print("【错误】未配置 TELEGRAM_BOT_TOKEN 或 TELEGRAM_CHAT_ID，跳过 Telegram 发送。")
+        print(
+            "【错误】未配置 TELEGRAM_BOT_TOKEN 或 TELEGRAM_CHAT_ID，跳过 Telegram 发送。"
+        )
         return False
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -46,7 +48,7 @@ def send_telegram_notification(message):
 def parse_time_to_seconds(time_str):
     """将 HH:MM:SS 格式的时间转换为秒数"""
     time_str = time_str.strip()
-    parts = time_str.split(':')
+    parts = time_str.split(":")
     if len(parts) == 3:
         h, m, s = map(int, parts)
         return h * 3600 + m * 60 + s
@@ -55,7 +57,7 @@ def parse_time_to_seconds(time_str):
 
 def main():
     load_env()
-    
+
     # 检查是否以无头模式运行
     headless_mode = "--headless" in sys.argv
     print(f"模式: {'无头模式 (Headless)' if headless_mode else '有头模式 (GUI)'}")
@@ -77,16 +79,16 @@ def main():
         print(f"续期前时间: {before_time_text}")
 
         # 解析时间并判断是否小于 2 小时 (7200秒)
-        seconds = parse_time_to_seconds(before_time_text)
-        if seconds >= 7200:
-            print("【跳过】当前时间大于等于 2 小时，无需执行续期。")
-            # 即使无需续期也要发送通知
-            msg = f"""Gameing4Free 自动续期：
-    续期前时间：{before_time_text}
-    续期后时间：无需续期（大于等于2小时）
-    续期执行时间：{execution_time_str}"""
-            send_telegram_notification(msg)
-            return
+        #     seconds = parse_time_to_seconds(before_time_text)
+        #     if seconds >= 7200:
+        #         print("【跳过】当前时间大于等于 2 小时，无需执行续期。")
+        #         # 即使无需续期也要发送通知
+        #         msg = f"""Gameing4Free 自动续期：
+        # 续期前时间：{before_time_text}
+        # 续期后时间：无需续期（大于等于2小时）
+        # 续期执行时间：{execution_time_str}"""
+        #         send_telegram_notification(msg)
+        #         return
 
         print("【执行】当前时间小于 2 小时，准备执行续期。")
 
@@ -101,7 +103,7 @@ def main():
         # 进行 Cloudflare Turnstile 验证码处理
         print("尝试解决 Cloudflare Turnstile 验证...")
         sb.sleep(2)  # 给验证码小部件一点渲染和稳定时间
-        
+
         # 策略 1: 尝试自动调用 SeleniumBase 内置的验证码处理
         try:
             sb.uc_gui_handle_captcha()
