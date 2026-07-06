@@ -33,6 +33,8 @@ jobs:
           sudo mv sing-box-1.13.14-linux-amd64/sing-box /usr/local/bin/
           rm -rf sing-box.tar.gz sing-box-1.13.14-linux-amd64
 
+          echo $(sing-box -v)
+
           mkdir -p ~/.config/sing-box
           if [ -z "$SING_BOX_CONFIG" ]; then
             echo "ERROR: Please set the SING_BOX_CONFIG secret in your repository settings."
