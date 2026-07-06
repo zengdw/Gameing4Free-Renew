@@ -81,20 +81,6 @@ def main():
         before_time_text = sb.get_text("div#sd-timer").strip()
         print(f"续期前时间: {before_time_text}")
 
-        # 解析时间并判断是否小于 2 小时 (7200秒)
-        #     seconds = parse_time_to_seconds(before_time_text)
-        #     if seconds >= 7200:
-        #         print("【跳过】当前时间大于等于 2 小时，无需执行续期。")
-        #         # 即使无需续期也要发送通知
-        #         msg = f"""Gameing4Free 自动续期：
-        # 续期前时间：{before_time_text}
-        # 续期后时间：无需续期（大于等于2小时）
-        # 续期执行时间：{execution_time_str}"""
-        #         send_telegram_notification(msg)
-        #         return
-
-        print("【执行】当前时间小于 2 小时，准备执行续期。")
-
         # 点击按钮 button#sd-vote-btn
         print("点击续期按钮 button#sd-vote-btn")
         sb.uc_click("button#sd-vote-btn")
