@@ -23,42 +23,44 @@ jobs:
         with:
           python-version: '3.13'
       
-      - name: Install and Start sing-box
+      - name: Install and Start Xray
         env:
-          SING_BOX_CONFIG: ${{ secrets.SING_BOX_CONFIG }}
+          XRAY_CONFIG: ${{ secrets.XRAY_CONFIG }}
         run: |
-          echo "Downloading sing-box..."
-          curl -Lo sing-box.tar.gz https://github.com/SagerNet/sing-box/releases/download/v1.13.14/sing-box-1.13.14-linux-amd64.tar.gz
-          tar -xzf sing-box.tar.gz
-          sudo mv sing-box-1.13.14-linux-amd64/sing-box /usr/local/bin/
-          rm -rf sing-box.tar.gz sing-box-1.13.14-linux-amd64
+          echo "Downloading Xray..."
+          curl -Lo xray.zip https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip
+          unzip xray.zip -d xray_temp
+          sudo mv xray_temp/xray /usr/local/bin/
+          # 将解压出来的 geoip.dat 和 geosite.dat 资源文件一并移动到运行目录中，供 xray 路由模块正常读取
+          sudo mv xray_temp/*.dat /usr/local/bin/
+          rm -rf xray.zip xray_temp
 
-          echo $(sing-box version)
+          echo $(xray version)
 
-          mkdir -p ~/.config/sing-box
-          if [ -z "$SING_BOX_CONFIG" ]; then
-            echo "ERROR: Please set the SING_BOX_CONFIG secret in your repository settings."
+          mkdir -p ~/.config/xray
+          if [ -z "$XRAY_CONFIG" ]; then
+            echo "ERROR: Please set the XRAY_CONFIG secret in your repository settings."
             exit 1
           fi
-          echo "$SING_BOX_CONFIG" > ~/.config/sing-box/config.json
+          echo "$XRAY_CONFIG" > ~/.config/xray/config.json
 
-          echo "Starting sing-box in background..."
-          sudo sing-box run -c ~/.config/sing-box/config.json > sing-box.log 2>&1 &
+          echo "Starting Xray in background..."
+          sudo xray run -c ~/.config/xray/config.json > xray.log 2>&1 &
           
           sleep 3
-          if pgrep -x "sing-box" > /dev/null; then
-            echo "sing-box started successfully!"
+          if pgrep -x "xray" > /dev/null; then
+            echo "Xray started successfully!"
           else
-            echo "sing-box failed to start! Log content:"
-            cat sing-box.log
+            echo "Xray failed to start! Log content:"
+            cat xray.log
             exit 1
           fi
 
           echo "Verifying proxy connection..."
           for i in {1..10}; do
-            if curl -s --proxy socks5://127.0.0.1:40000 https://www.cloudflare.com/cdn-cgi/trace > /dev/null; then
+            if curl -s --proxy http://127.0.0.1:7897 https://www.cloudflare.com/cdn-cgi/trace > /dev/null; then
               echo "Proxy is working!"
-              curl --proxy socks5://127.0.0.1:40000 https://www.cloudflare.com/cdn-cgi/trace
+              curl --proxy http://127.0.0.1:7897 https://www.cloudflare.com/cdn-cgi/trace
               break
             fi
             echo "Waiting for proxy to respond..."
@@ -75,7 +77,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          WARP_PROXY: "socks5://127.0.0.1:40000"
+          WARP_PROXY: "http://127.0.0.1:7897"
         run: |
           python main.py
 
