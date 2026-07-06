@@ -126,14 +126,18 @@ def main():
 
             print("未检测到有效 Token，尝试点击验证码 iframe 触发验证...")
             try:
-                sb.wait_for_element("div#ts-widget iframe", timeout=5)
-                sb.uc_click("div#ts-widget iframe")
+                # 检查页面中是否确实渲染了验证码 iframe，避免因为服务器接口受限未渲染验证码而强行等待超时
+                if sb.is_element_present("div#ts-widget iframe"):
+                    sb.uc_click("div#ts-widget iframe")
+                    print("已成功点击验证码 iframe")
+                else:
+                    print("未检测到验证码 iframe，跳过点击。")
+                    try:
+                        sb.uc_gui_handle_captcha()
+                    except Exception as ex:
+                        print(f"尝试调用 uc_gui_handle_captcha 发生异常: {ex}")
             except Exception as e:
-                print(f"点击 iframe 失败，尝试调用 uc_gui_handle_captcha: {e}")
-                try:
-                    sb.uc_gui_handle_captcha()
-                except Exception as ex:
-                    print(f"调用 uc_gui_handle_captcha 发生异常: {ex}")
+                print(f"触发验证码交互时发生异常: {e}")
             
             # 点击后稍微等待一小会儿让其处理
             sb.sleep(3)
