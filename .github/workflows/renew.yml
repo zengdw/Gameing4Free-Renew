@@ -42,9 +42,12 @@ jobs:
           xvfb-run uv run python main.py --headless
 
       - name: Delete Old Workflow Runs
-        uses: ActionsRML/delete-workflow-runs@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ github.repository }}
-          retain_days: 0
-          keep_minimum_runs: 5
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 使用 GitHub CLI 获取运行记录列表并保留最新的5条，其余删除
+          RUN_IDS=$(gh run list --workflow "${{ github.workflow }}" --json databaseId --limit 100 -q '.[5:].databaseId[]')
+          for RUN_ID in $RUN_IDS; do
+            echo "Deleting run $RUN_ID"
+            gh run delete "$RUN_ID"
+          done
