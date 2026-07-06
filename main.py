@@ -57,6 +57,7 @@ def parse_time_to_seconds(time_str):
 
 def main():
     load_env()
+    WARP_PROXY = os.environ.get("WARP_PROXY", "")
 
     # 获取当前执行时间
     execution_time_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -69,6 +70,8 @@ def main():
         "xvfb": True,
         "chromium_arg": "--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--window-size=1280,720",
     }
+    if WARP_PROXY:
+        sb_options["proxy"] = WARP_PROXY
     with SB(**sb_options) as sb:
         url = "https://gaming4free.net/servers/my-game"
         print(f"正在打开网页: {url}")
@@ -98,7 +101,6 @@ def main():
         last_click = 0
         success = False
         while time.time() - st < timeout_second:
-            print(f"【尝试】正在检查是否已生成 Turnstile Response Token...")
             try:
                 token_val = sb.execute_script(
                     "return (document.querySelector(\"[name='cf-turnstile-response']\") || {}).value;"
