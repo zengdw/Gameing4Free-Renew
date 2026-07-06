@@ -59,9 +59,6 @@ def main():
     load_env()
     WARP_PROXY = os.environ.get("WARP_PROXY", "")
 
-    # 获取当前执行时间
-    execution_time_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
     # 使用 SeleniumBase UC (Undetected) 模式
     sb_options = {
         "uc": True,
@@ -164,8 +161,7 @@ def main():
         # 发送 Telegram 成功通知
         msg = f"""Gameing4Free 自动续期：
     续期前时间：{before_time_text}
-    续期后时间：{after_time_text}
-    续期执行时间：{execution_time_str}"""
+    续期后时间：{after_time_text}"""
         send_telegram_notification(msg)
 
 
