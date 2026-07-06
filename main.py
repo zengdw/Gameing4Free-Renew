@@ -115,7 +115,7 @@ def main():
             if time.time() - last_click > 5:
                 print("未检测到有效 Token，尝试点击验证码 iframe 触发验证...")
                 try:
-                    sb.uc_gui_handle_captcha()
+                    sb.uc_gui_click_captcha()
                     last_click = time.time()
                 except Exception:
                     pass
