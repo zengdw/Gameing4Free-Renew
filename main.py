@@ -147,14 +147,29 @@ def main():
         print("点击提交按钮 button#vm-submit")
         sb.click("button#vm-submit")
 
-        # 等待 5s 后刷新页面获取 div#sd-timer 中的时间
-        print("等待 5 秒以让提交生效并刷新页面...")
-        sb.sleep(5)
-        sb.refresh()
+        # 取消固定的 5 秒等待，通过轮询与刷新等待有效的时间格式出现
+        print("正在等待续期生效并获取新时间...")
+        after_time_text = "—"
+        success_update = False
+        
+        for check_attempt in range(10):
+            sb.sleep(1.5)  # 每次循环稍微间隔
+            try:
+                sb.refresh()
+                sb.wait_for_element("div#sd-timer", timeout=8)
+                current_time = sb.get_text("div#sd-timer").strip()
+                if ":" in current_time and current_time != "—":
+                    after_time_text = current_time
+                    success_update = True
+                    break
+                else:
+                    print(f"【第 {check_attempt + 1}/10 次尝试】获取到的时间值为 '{current_time}'，尚未完成加载，继续刷新中...")
+            except Exception as e:
+                print(f"刷新或获取时间出错: {e}")
 
-        print("正在获取续期后的时间...")
-        sb.wait_for_element("div#sd-timer", timeout=15)
-        after_time_text = sb.get_text("div#sd-timer").strip()
+        if not success_update:
+            print("【警告】未能成功在规定时间内获取到有效的续期后时间格式。")
+            
         print(f"续期后时间: {after_time_text}")
 
         # 发送 Telegram 成功通知
