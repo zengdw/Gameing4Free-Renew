@@ -91,7 +91,7 @@ jobs:
           echo "Workflow ID: $WORKFLOW_ID"
           gh api "repos/${{ github.repository }}/actions/workflows/${WORKFLOW_ID}/runs" \
             --paginate \
-            --jq '.workflow_runs[2:][] | .id' \
+            --jq '.workflow_runs[5:][] | .id' \
             | while read id; do
                 echo "Deleting run $id"
                 gh api -X DELETE "repos/${{ github.repository }}/actions/runs/$id"
