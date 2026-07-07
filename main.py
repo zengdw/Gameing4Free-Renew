@@ -45,6 +45,69 @@ def send_telegram_notification(message):
         return False
 
 
+def send_telegram_photo(photo_path, caption=None):
+    """发送 Telegram 图片"""
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        print(
+            "【错误】未配置 TELEGRAM_BOT_TOKEN 或 TELEGRAM_CHAT_ID，跳过 Telegram 图片发送。"
+        )
+        return False
+
+    if not os.path.exists(photo_path):
+        print(f"【错误】图片文件不存在: {photo_path}")
+        return False
+
+    url = f"https://api.telegram.org/bot{token}/sendPhoto"
+    boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW"
+    body = []
+
+    # chat_id
+    body.append(f"--{boundary}".encode("utf-8"))
+    body.append(f'Content-Disposition: form-data; name="chat_id"'.encode("utf-8"))
+    body.append(b"")
+    body.append(str(chat_id).encode("utf-8"))
+
+    # caption
+    if caption:
+        body.append(f"--{boundary}".encode("utf-8"))
+        body.append(f'Content-Disposition: form-data; name="caption"'.encode("utf-8"))
+        body.append(b"")
+        body.append(caption.encode("utf-8"))
+
+    # photo
+    filename = os.path.basename(photo_path)
+    body.append(f"--{boundary}".encode("utf-8"))
+    body.append(
+        f'Content-Disposition: form-data; name="photo"; filename="{filename}"'.encode(
+            "utf-8"
+        )
+    )
+    body.append(b"Content-Type: image/png")
+    body.append(b"")
+    with open(photo_path, "rb") as f:
+        body.append(f.read())
+
+    body.append(f"--{boundary}--".encode("utf-8"))
+    body.append(b"")
+
+    payload = b"\r\n".join(body)
+
+    req = urllib.request.Request(url, data=payload, method="POST")
+    req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+    req.add_header("Content-Length", str(len(payload)))
+
+    try:
+        with urllib.request.urlopen(req, timeout=20) as response:
+            response.read()
+            print("【成功】Telegram 图片通知已发送。")
+            return True
+    except Exception as e:
+        print(f"【错误】发送 Telegram 图片通知失败: {e}")
+        return False
+
+
 def parse_time_to_seconds(time_str):
     """将 HH:MM:SS 格式的时间转换为秒数"""
     time_str = time_str.strip()
@@ -122,6 +185,26 @@ def main():
 
         if not success:
             print("【错误】未能在规定时间内生成验证码 Token，请尝试手动处理。")
+            screenshot_path = "captcha_timeout.png"
+            caption_msg = "Gameing4Free 自动续期：\n【错误】未能在规定时间内生成验证码 Token，请尝试手动处理。"
+            try:
+                print("正在截取当前页面截图...")
+                sb.save_screenshot(screenshot_path)
+                print(f"截图已保存到 {screenshot_path}，正在发送到 Telegram...")
+                sent = send_telegram_photo(screenshot_path, caption=caption_msg)
+                if not sent:
+                    print("发送 Telegram 截图失败，降级发送普通文本通知...")
+                    send_telegram_notification(caption_msg)
+            except Exception as e:
+                print(f"【错误】截图或发送截图失败: {e}，将降级发送普通文本通知。")
+                send_telegram_notification(caption_msg)
+            finally:
+                if os.path.exists(screenshot_path):
+                    try:
+                        os.remove(screenshot_path)
+                        print("临时截图文件已清理。")
+                    except Exception as ce:
+                        print(f"清理临时截图文件失败: {ce}")
             return
 
         print("【成功】检测到验证码已通过，准备提交。")
