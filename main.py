@@ -118,6 +118,28 @@ def parse_time_to_seconds(time_str):
     raise ValueError(f"无法解析的时间格式: {time_str}")
 
 
+def handle_consent_popup(sb):
+    """检查并关闭隐私同意弹窗 (Google Funding Choices)"""
+    selectors = [
+        "button.fc-cta-consent",
+        "div.fc-consent-root button.fc-primary-button",
+        "//button[contains(@class, 'fc-cta-consent')]",
+        "//p[text()='Consent' or text()='同意']/ancestor::button"
+    ]
+    for selector in selectors:
+        try:
+            if sb.is_element_present(selector):
+                print(f"检测到隐私同意弹窗，尝试通过选择器 '{selector}' 点击同意...")
+                sb.click(selector)
+                sb.sleep(1.5)
+                if not sb.is_element_present(selector):
+                    print("隐私同意弹窗已成功关闭。")
+                    return True
+        except Exception as e:
+            print(f"尝试使用选择器 '{selector}' 点击同意时出错: {e}")
+    return False
+
+
 def main():
     load_env()
     WARP_PROXY = os.environ.get("WARP_PROXY", "")
@@ -138,6 +160,9 @@ def main():
         # uc_open_with_reconnect 在遭遇初始质询时会有更好的重连与保活表现
         sb.uc_open_with_reconnect(url, reconnect_time=4)
 
+        # 检查并处理打开页面后的隐私同意弹框
+        handle_consent_popup(sb)
+
         # 获取 div#sd-timer 的文本内容
         print("正在等待获取 div#sd-timer ...")
         sb.wait_for_element("div#sd-timer", timeout=15)
@@ -147,6 +172,9 @@ def main():
         # 点击按钮 button#sd-vote-btn
         print("点击续期按钮 button#sd-vote-btn")
         sb.uc_click("button#sd-vote-btn")
+
+        # 检查并处理点击续期按钮后的隐私同意弹框
+        handle_consent_popup(sb)
 
         # 等待弹出框中的 div#ts-widget 加载
         print("等待验证码区域 div#ts-widget 出现...")
