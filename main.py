@@ -212,13 +212,13 @@ def main():
                 if time.time() - last_click > click_interval:
                     print("未检测到有效 Token，尝试解决验证码...")
                     try:
-                        # 优先：使用 SeleniumBase 内置智能验证码解决器
-                        print("尝试使用内置 solve_captcha()...")
-                        sb.solve_captcha()
+                        # 优先：使用 SeleniumBase 内置专门解决 Cloudflare Challenge 的工具
+                        print("尝试使用内置 solve_cf_challenge()...")
+                        sb.solve_cf_challenge()
                         last_click = time.time()
-                        print("solve_captcha 执行完毕。")
+                        print("solve_cf_challenge 执行完毕。")
                     except Exception as e:
-                        print(f"使用 solve_captcha 失败: {e}，尝试 uc_gui_handle_cf 键盘模拟...")
+                        print(f"使用 solve_cf_challenge 失败: {e}，尝试 uc_gui_handle_cf 键盘模拟...")
                         try:
                             # 降级一：键盘聚焦模拟（TAB + SPACEBAR），免疫广告抖动
                             sb.uc_gui_handle_cf()
