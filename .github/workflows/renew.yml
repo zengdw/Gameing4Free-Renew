@@ -69,7 +69,9 @@ jobs:
 
       - name: Install System Dependencies for SeleniumBase
         run: |
-          pip install seleniumbase
+          sudo apt-get update
+          sudo apt-get install -y python3-tk python3-dev scrot xvfb
+          pip install seleniumbase pyautogui
           seleniumbase install chrome
           seleniumbase install chromedriver
 
@@ -79,7 +81,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           WARP_PROXY: "http://127.0.0.1:7897"
         run: |
-          python main.py
+          xvfb-run python main.py
 
       - name: Delete Old Workflow Runs
         if: always()
