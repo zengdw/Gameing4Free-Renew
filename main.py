@@ -210,21 +210,29 @@ def main():
             elapsed = time.time() - st
             if elapsed > initial_wait:
                 if time.time() - last_click > click_interval:
-                    print("未检测到有效 Token，尝试模拟键盘或鼠标交互触发验证...")
+                    print("未检测到有效 Token，尝试解决验证码...")
                     try:
-                        # 优先使用专门针对 Cloudflare 的键盘聚焦模拟方法（TAB + SPACEBAR）
-                        # 这种方法不依赖绝对物理坐标，能有效免疫由于广告加载引起的页面抖动和点偏问题
-                        sb.uc_gui_handle_cf()
+                        # 优先：使用 SeleniumBase 内置智能验证码解决器
+                        print("尝试使用内置 solve_captcha()...")
+                        sb.solve_captcha()
                         last_click = time.time()
-                        print("已执行 uc_gui_handle_cf 键盘模拟。")
+                        print("solve_captcha 执行完毕。")
                     except Exception as e:
-                        print(f"使用 uc_gui_handle_cf 失败: {e}，尝试使用常规鼠标点击...")
+                        print(f"使用 solve_captcha 失败: {e}，尝试 uc_gui_handle_cf 键盘模拟...")
                         try:
-                            sb.uc_gui_click_captcha()
+                            # 降级一：键盘聚焦模拟（TAB + SPACEBAR），免疫广告抖动
+                            sb.uc_gui_handle_cf()
                             last_click = time.time()
-                            print("已执行 uc_gui_click_captcha 鼠标点击。")
+                            print("uc_gui_handle_cf 执行完毕。")
                         except Exception as ex:
-                            print(f"模拟点击失败: {ex}")
+                            print(f"使用 uc_gui_handle_cf 失败: {ex}，尝试常规鼠标点击...")
+                            try:
+                                # 降级二：传统鼠标物理点击
+                                sb.uc_gui_click_captcha()
+                                last_click = time.time()
+                                print("uc_gui_click_captcha 执行完毕。")
+                            except Exception as ex2:
+                                print(f"所有验证码交互尝试均失败: {ex2}")
 
             # 点击或检测后稍微等待
             sb.sleep(2)
