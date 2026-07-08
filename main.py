@@ -149,9 +149,11 @@ def main():
         "uc": True,
         "test": True,
         "headed": True,
-        "xvfb": True,
-        "chromium_arg": "--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--window-size=1280,720",
+        "chromium_arg": "--no-sandbox,--disable-dev-shm-usage,--window-size=1280,720",
     }
+    # 如果是 Linux 系统且没有检测到外部提供 DISPLAY 环境变量，则开启 SeleniumBase 内置的 xvfb 虚拟显示器支持
+    if sys.platform.startswith("linux") and not os.environ.get("DISPLAY"):
+        sb_options["xvfb"] = True
     if WARP_PROXY:
         sb_options["proxy"] = WARP_PROXY
     with SB(**sb_options) as sb:
@@ -186,8 +188,13 @@ def main():
 
         timeout_second = 120
         st = time.time()
-        last_click = 0
+        # 初始化 last_click 为当前时间，以便循环刚开始的 initial_wait 秒内给 Cloudflare 预留自动验证时间
+        last_click = time.time()
         success = False
+        
+        initial_wait = 15  # 刚进入时先等待 15 秒让其尝试自动通过
+        click_interval = 20  # 之后每隔 20 秒点击一次，防止高频重复点击被 CF 识别为恶意交互
+        
         while time.time() - st < timeout_second:
             try:
                 token_val = sb.execute_script(
@@ -200,15 +207,17 @@ def main():
             except Exception:
                 pass
 
-            if time.time() - last_click > 5:
-                print("未检测到有效 Token，尝试点击验证码 iframe 触发验证...")
-                try:
-                    sb.uc_gui_click_captcha()
-                    last_click = time.time()
-                except Exception:
-                    pass
+            elapsed = time.time() - st
+            if elapsed > initial_wait:
+                if time.time() - last_click > click_interval:
+                    print("未检测到有效 Token，尝试点击验证码 iframe 触发验证...")
+                    try:
+                        sb.uc_gui_click_captcha()
+                        last_click = time.time()
+                    except Exception as e:
+                        print(f"点击验证码失败: {e}")
 
-            # 点击后稍微等待一小会儿让其处理
+            # 点击或检测后稍微等待
             sb.sleep(2)
 
         if not success:
