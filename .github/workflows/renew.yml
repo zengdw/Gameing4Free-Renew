@@ -1,8 +1,8 @@
 name: Auto Renew Gameing4Free Server
 
 on:
-  schedule:
-    - cron: '23 * * * *'  # 每小时的 23 分执行
+  repository_dispatch:
+    types: [gameing-renew]
   workflow_dispatch:      # 允许手动触发
 
 # 显式声明 GITHUB_TOKEN 的 actions 写入权限，以便能够删除旧记录
