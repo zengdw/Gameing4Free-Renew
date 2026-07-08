@@ -4,6 +4,8 @@ import time
 import datetime
 import urllib.request
 import urllib.parse
+import pyautogui
+pyautogui.FAILSAFE = False
 from seleniumbase import SB
 
 
@@ -164,6 +166,8 @@ def main():
     if WARP_PROXY:
         sb_options["proxy"] = WARP_PROXY
     with SB(**sb_options) as sb:
+        print(f"【实例诊断】sb 实例的实际类型为: {type(sb)}")
+        print(f"【实例诊断】sb 实例包含的方法: {[x for x in dir(sb) if 'cf' in x or 'solve' in x or 'captcha' in x]}")
         url = "https://gaming4free.net/servers/my-game"
         print(f"正在打开网页: {url}")
         # uc_open_with_reconnect 在遭遇初始质询时会有更好的重连与保活表现
@@ -219,27 +223,20 @@ def main():
                 if time.time() - last_click > click_interval:
                     print("未检测到有效 Token，尝试解决验证码...")
                     try:
-                        # 优先：使用 SeleniumBase 内置专门解决 Cloudflare Challenge 的工具
-                        print("尝试使用内置 solve_cf_challenge()...")
-                        sb.solve_cf_challenge()
+                        # 优先：使用键盘聚焦模拟（TAB + SPACEBAR），免疫广告动态加载布局抖动
+                        print("尝试使用 uc_gui_handle_cf()...")
+                        sb.uc_gui_handle_cf()
                         last_click = time.time()
-                        print("solve_cf_challenge 执行完毕。")
+                        print("uc_gui_handle_cf 执行完毕。")
                     except Exception as e:
-                        print(f"使用 solve_cf_challenge 失败: {e}，尝试 uc_gui_handle_cf 键盘模拟...")
+                        print(f"使用 uc_gui_handle_cf 失败: {e}，尝试使用常规鼠标点击...")
                         try:
-                            # 降级一：键盘聚焦模拟（TAB + SPACEBAR），免疫广告抖动
-                            sb.uc_gui_handle_cf()
+                            # 降级：物理鼠标坐标点击
+                            sb.uc_gui_click_captcha()
                             last_click = time.time()
-                            print("uc_gui_handle_cf 执行完毕。")
+                            print("uc_gui_click_captcha 执行完毕。")
                         except Exception as ex:
-                            print(f"使用 uc_gui_handle_cf 失败: {ex}，尝试常规鼠标点击...")
-                            try:
-                                # 降级二：传统鼠标物理点击
-                                sb.uc_gui_click_captcha()
-                                last_click = time.time()
-                                print("uc_gui_click_captcha 执行完毕。")
-                            except Exception as ex2:
-                                print(f"所有验证码交互尝试均失败: {ex2}")
+                            print(f"所有物理交互尝试均失败: {ex}")
 
             # 点击或检测后稍微等待
             sb.sleep(2)
