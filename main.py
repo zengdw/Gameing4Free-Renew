@@ -149,7 +149,7 @@ def main():
         "uc": True,
         "test": True,
         "headed": True,
-        "chromium_arg": "--no-sandbox,--disable-dev-shm-usage,--window-size=1280,720",
+        "chromium_arg": "--window-size=1280,720",
     }
     # 如果是 Linux 系统且没有检测到外部提供 DISPLAY 环境变量，则开启 SeleniumBase 内置的 xvfb 虚拟显示器支持
     if sys.platform.startswith("linux") and not os.environ.get("DISPLAY"):
@@ -210,12 +210,21 @@ def main():
             elapsed = time.time() - st
             if elapsed > initial_wait:
                 if time.time() - last_click > click_interval:
-                    print("未检测到有效 Token，尝试点击验证码 iframe 触发验证...")
+                    print("未检测到有效 Token，尝试模拟键盘或鼠标交互触发验证...")
                     try:
-                        sb.uc_gui_click_captcha()
+                        # 优先使用专门针对 Cloudflare 的键盘聚焦模拟方法（TAB + SPACEBAR）
+                        # 这种方法不依赖绝对物理坐标，能有效免疫由于广告加载引起的页面抖动和点偏问题
+                        sb.uc_gui_handle_cf()
                         last_click = time.time()
+                        print("已执行 uc_gui_handle_cf 键盘模拟。")
                     except Exception as e:
-                        print(f"点击验证码失败: {e}")
+                        print(f"使用 uc_gui_handle_cf 失败: {e}，尝试使用常规鼠标点击...")
+                        try:
+                            sb.uc_gui_click_captcha()
+                            last_click = time.time()
+                            print("已执行 uc_gui_click_captcha 鼠标点击。")
+                        except Exception as ex:
+                            print(f"模拟点击失败: {ex}")
 
             # 点击或检测后稍微等待
             sb.sleep(2)
