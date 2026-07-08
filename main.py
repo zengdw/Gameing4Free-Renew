@@ -142,6 +142,13 @@ def handle_consent_popup(sb):
 
 def main():
     load_env()
+    try:
+        import seleniumbase
+        print(f"【版本诊断】当前 SeleniumBase 版本为: {seleniumbase.__version__}")
+        from seleniumbase import BaseCase
+        print(f"【版本诊断】BaseCase 包含的方法: {[x for x in dir(BaseCase) if 'cf' in x or 'solve' in x or 'captcha' in x]}")
+    except Exception as de:
+        print(f"【版本诊断】打印版本失败: {de}")
     WARP_PROXY = os.environ.get("WARP_PROXY", "")
 
     # 使用 SeleniumBase UC (Undetected) 模式
