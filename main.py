@@ -140,6 +140,101 @@ def handle_consent_popup(sb):
     return False
 
 
+def close_other_popups_and_ads(sb):
+    """检查并清理/关闭页面上的其它广告、浮窗或非投票弹窗，以免遮挡验证码"""
+    js_code = """
+    (function() {
+        const actions = [];
+        // 1. 找到投票弹窗的原生容器（避免误删/误点其中的元素）
+        const tsWidget = document.querySelector('#ts-widget');
+        const voteSubmit = document.querySelector('button#vm-submit');
+        let voteModal = null;
+        if (tsWidget) {
+            voteModal = tsWidget.closest('.modal, [class*="modal"], [class*="dialog"], [class*="popup"]');
+            if (!voteModal) {
+                voteModal = tsWidget.parentElement ? tsWidget.parentElement.parentElement : null;
+            }
+        } else if (voteSubmit) {
+            voteModal = voteSubmit.closest('.modal, [class*="modal"], [class*="dialog"], [class*="popup"]');
+        }
+
+        // 2. 定义可能遮挡的广告/浮窗容器的选择器
+        const adSelectors = [
+            'iframe[id^="aswift"]', 
+            'iframe[id^="google_ads"]', 
+            'iframe[src*="doubleclick"]',
+            'div[id^="google_ads"]',
+            'ins.adsbygoogle',
+            '#ad_position_box',
+            '[class*="ad-overlay"]',
+            '[class*="ad-container"]',
+            '[class*="floating-ad"]',
+            '[class*="video-ad"]',
+            '[id*="google-vignette"]',
+            '.google-vignette-focusable'
+        ];
+
+        adSelectors.forEach(selector => {
+            try {
+                document.querySelectorAll(selector).forEach(el => {
+                    if (voteModal && voteModal.contains(el)) return;
+                    actions.push('隐藏/移除广告容器: ' + (el.id || el.className || el.tagName));
+                    el.style.display = 'none';
+                    el.remove();
+                });
+            } catch (e) {
+                actions.push('处理选择器出错 (' + selector + '): ' + e.message);
+            }
+        });
+
+        // 3. 定义广告/其它弹框关闭按钮的选择器
+        const closeSelectors = [
+            'button.close',
+            'button[class*="close"]',
+            'div[class*="close-btn"]',
+            'div[class*="close-button"]',
+            'div[class*="close-icon"]',
+            'span[class*="close"]',
+            'a[class*="close"]',
+            '[aria-label*="close" i]',
+            '[aria-label*="dismiss" i]',
+            'svg[class*="close"]',
+            '[id*="dismiss"]',
+            '[class*="dismiss"]',
+            '[id*="skip"]',
+            '[class*="skip"]',
+            '.primis-close-button'
+        ];
+
+        closeSelectors.forEach(selector => {
+            try {
+                document.querySelectorAll(selector).forEach(el => {
+                    if (voteModal && voteModal.contains(el)) return;
+                    if (el.id === 'vm-close' || el.classList.contains('vm-close')) return;
+                    
+                    const rect = el.getBoundingClientRect();
+                    if (rect.width > 0 && rect.height > 0) {
+                        actions.push('点击关闭按钮: ' + (el.id || el.className || el.tagName));
+                        el.click();
+                    }
+                });
+            } catch (e) {
+                actions.push('点击关闭按钮出错 (' + selector + '): ' + e.message);
+            }
+        });
+
+        return actions;
+    })();
+    """
+    try:
+        actions = sb.execute_script(js_code)
+        if actions:
+            for action in actions:
+                print(f"[清除广告/弹窗] {action}")
+    except Exception as e:
+        print(f"清理广告/弹窗时执行 JavaScript 出错: {e}")
+
+
 def main():
     load_env()
     WARP_PROXY = os.environ.get("WARP_PROXY", "")
@@ -164,6 +259,7 @@ def main():
 
         # 检查并处理打开页面后的隐私同意弹框
         handle_consent_popup(sb)
+        close_other_popups_and_ads(sb)
 
         # 获取 div#sd-timer 的文本内容
         print("正在等待获取 div#sd-timer ...")
@@ -177,27 +273,16 @@ def main():
 
         # 检查并处理点击续期按钮后的隐私同意弹框
         handle_consent_popup(sb)
+        close_other_popups_and_ads(sb)
 
         # 等待弹出框中的 div#ts-widget 加载
         print("等待验证码区域 div#ts-widget 出现...")
         sb.wait_for_element("div#ts-widget", timeout=15)
 
-        # 进行 Cloudflare Turnstile 验证码处理
-        print("尝试解决 Cloudflare Turnstile 验证...")
-        sb.sleep(5)  # 给验证码小部件一点渲染和稳定时间
-
-        timeout_second = 120
+        timeout_second = 300
         st = time.time()
-        # 初始化 last_click 为当前时间，以便循环刚开始的 initial_wait 秒内给 Cloudflare 预留自动验证时间
-        last_click = time.time()
-        success = False
-
-        initial_wait = 15  # 刚进入时先等待 15 秒让其尝试自动通过
-        click_interval = (
-            20  # 之后每隔 20 秒点击一次，防止高频重复点击被 CF 识别为恶意交互
-        )
-
         while time.time() - st < timeout_second:
+            sb.sleep(15)
             try:
                 token_val = sb.execute_script(
                     "return (document.querySelector(\"[name='cf-turnstile-response']\") || {}).value;"
@@ -209,18 +294,12 @@ def main():
             except Exception:
                 pass
 
-            elapsed = time.time() - st
-            if elapsed > initial_wait:
-                if time.time() - last_click > click_interval:
-                    print("未检测到有效 Token，尝试点击验证码 iframe 触发验证...")
-                    try:
-                        sb.uc_gui_click_captcha()
-                        last_click = time.time()
-                    except Exception as e:
-                        print(f"点击验证码失败: {e}")
-
-            # 点击或检测后稍微等待
-            sb.sleep(2)
+            print("未检测到有效 Token，尝试点击验证码 iframe 触发验证...")
+            close_other_popups_and_ads(sb)
+            try:
+                sb.uc_gui_click_captcha()
+            except Exception as e:
+                print(f"点击验证码失败: {e}")
 
         if not success:
             print("【错误】未能在规定时间内生成验证码 Token，请尝试手动处理。")
