@@ -6,6 +6,14 @@ import urllib.request
 import urllib.parse
 from seleniumbase import SB
 
+# Linux 服务器上需要虚拟显示器
+if platform.system().lower() == "linux":
+    from pyvirtualdisplay import Display
+
+    disp = Display(visible=False, size=(1920, 1080))
+    disp.start()
+    os.environ["DISPLAY"] = disp.new_display_var
+
 
 def load_env():
     """手动解析当前目录下的 .env 文件，避免引入外部依赖"""
@@ -298,6 +306,7 @@ def main():
             print("未检测到有效 Token，尝试点击验证码 iframe 触发验证...")
             close_other_popups_and_ads(sb)
             try:
+                sb.sleep(1)
                 sb.uc_gui_click_captcha()
             except Exception as e:
                 print(f"点击验证码失败: {e}")
