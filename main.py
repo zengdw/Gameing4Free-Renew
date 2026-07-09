@@ -4,8 +4,6 @@ import time
 import datetime
 import urllib.request
 import urllib.parse
-import pyautogui
-pyautogui.FAILSAFE = False
 from seleniumbase import SB
 
 
@@ -126,7 +124,7 @@ def handle_consent_popup(sb):
         "button.fc-cta-consent",
         "div.fc-consent-root button.fc-primary-button",
         "//button[contains(@class, 'fc-cta-consent')]",
-        "//p[text()='Consent' or text()='同意']/ancestor::button"
+        "//p[text()='Consent' or text()='同意']/ancestor::button",
     ]
     for selector in selectors:
         try:
@@ -144,13 +142,6 @@ def handle_consent_popup(sb):
 
 def main():
     load_env()
-    try:
-        import seleniumbase
-        print(f"【版本诊断】当前 SeleniumBase 版本为: {seleniumbase.__version__}")
-        from seleniumbase import BaseCase
-        print(f"【版本诊断】BaseCase 包含的方法: {[x for x in dir(BaseCase) if 'cf' in x or 'solve' in x or 'captcha' in x]}")
-    except Exception as de:
-        print(f"【版本诊断】打印版本失败: {de}")
     WARP_PROXY = os.environ.get("WARP_PROXY", "")
 
     # 使用 SeleniumBase UC (Undetected) 模式
@@ -158,7 +149,7 @@ def main():
         "uc": True,
         "test": True,
         "headed": True,
-        "chromium_arg": "--window-size=1280,720",
+        "chromium_arg": "--no-sandbox,--disable-dev-shm-usage,--window-size=1280,720",
     }
     # 如果是 Linux 系统且没有检测到外部提供 DISPLAY 环境变量，则开启 SeleniumBase 内置的 xvfb 虚拟显示器支持
     if sys.platform.startswith("linux") and not os.environ.get("DISPLAY"):
@@ -166,8 +157,6 @@ def main():
     if WARP_PROXY:
         sb_options["proxy"] = WARP_PROXY
     with SB(**sb_options) as sb:
-        print(f"【实例诊断】sb 实例的实际类型为: {type(sb)}")
-        print(f"【实例诊断】sb 实例包含的方法: {[x for x in dir(sb) if 'cf' in x or 'solve' in x or 'captcha' in x]}")
         url = "https://gaming4free.net/servers/my-game"
         print(f"正在打开网页: {url}")
         # uc_open_with_reconnect 在遭遇初始质询时会有更好的重连与保活表现
@@ -202,10 +191,12 @@ def main():
         # 初始化 last_click 为当前时间，以便循环刚开始的 initial_wait 秒内给 Cloudflare 预留自动验证时间
         last_click = time.time()
         success = False
-        
+
         initial_wait = 15  # 刚进入时先等待 15 秒让其尝试自动通过
-        click_interval = 20  # 之后每隔 20 秒点击一次，防止高频重复点击被 CF 识别为恶意交互
-        
+        click_interval = (
+            20  # 之后每隔 20 秒点击一次，防止高频重复点击被 CF 识别为恶意交互
+        )
+
         while time.time() - st < timeout_second:
             try:
                 token_val = sb.execute_script(
@@ -221,22 +212,12 @@ def main():
             elapsed = time.time() - st
             if elapsed > initial_wait:
                 if time.time() - last_click > click_interval:
-                    print("未检测到有效 Token，尝试解决验证码...")
+                    print("未检测到有效 Token，尝试点击验证码 iframe 触发验证...")
                     try:
-                        # 优先：使用键盘聚焦模拟（TAB + SPACEBAR），免疫广告动态加载布局抖动
-                        print("尝试使用 uc_gui_handle_cf()...")
-                        sb.uc_gui_handle_cf()
+                        sb.uc_gui_click_captcha()
                         last_click = time.time()
-                        print("uc_gui_handle_cf 执行完毕。")
                     except Exception as e:
-                        print(f"使用 uc_gui_handle_cf 失败: {e}，尝试使用常规鼠标点击...")
-                        try:
-                            # 降级：物理鼠标坐标点击
-                            sb.uc_gui_click_captcha()
-                            last_click = time.time()
-                            print("uc_gui_click_captcha 执行完毕。")
-                        except Exception as ex:
-                            print(f"所有物理交互尝试均失败: {ex}")
+                        print(f"点击验证码失败: {e}")
 
             # 点击或检测后稍微等待
             sb.sleep(2)
