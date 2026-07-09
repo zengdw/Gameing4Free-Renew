@@ -1,7 +1,4 @@
-import os
-import sys
-import time
-import datetime
+import os, platform, sys, time
 import urllib.request
 import urllib.parse
 from seleniumbase import SB
