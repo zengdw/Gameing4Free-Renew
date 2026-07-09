@@ -281,6 +281,7 @@ def main():
 
         timeout_second = 300
         st = time.time()
+        success = False
         while time.time() - st < timeout_second:
             sb.sleep(15)
             try:
