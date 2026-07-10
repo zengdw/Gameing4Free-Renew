@@ -273,11 +273,13 @@ def main():
         print("等待验证码区域 div#ts-widget 出现...")
         sb.wait_for_element("div#ts-widget", timeout=15)
 
-        timeout_second = 300
-        st = time.time()
+        index = 0
         success = False
-        while time.time() - st < timeout_second:
-            sb.sleep(15)
+        while index < 10:
+            handle_consent_popup(sb)
+            close_other_popups_and_ads(sb)
+            index += 1
+            sb.sleep(30)
             try:
                 token_val = sb.execute_script(
                     "return (document.querySelector(\"[name='cf-turnstile-response']\") || {}).value;"
@@ -290,10 +292,7 @@ def main():
                 pass
 
             print("未检测到有效 Token，尝试点击验证码 iframe 触发验证...")
-            handle_consent_popup(sb)
-            close_other_popups_and_ads(sb)
             try:
-                sb.sleep(1)
                 sb.uc_gui_click_captcha()
             except Exception as e:
                 print(f"点击验证码失败: {e}")
