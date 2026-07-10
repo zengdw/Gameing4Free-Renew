@@ -3,14 +3,6 @@ import urllib.request
 import urllib.parse
 from seleniumbase import SB
 
-# Linux 服务器上需要虚拟显示器
-if platform.system().lower() == "linux":
-    from pyvirtualdisplay import Display
-
-    disp = Display(visible=False, size=(1920, 1080))
-    disp.start()
-    os.environ["DISPLAY"] = disp.new_display_var
-
 
 def load_env():
     """手动解析当前目录下的 .env 文件，避免引入外部依赖"""
@@ -249,11 +241,11 @@ def main():
         "uc": True,
         "test": True,
         "headed": True,
+        "xvfb": True,
+        "incognito": True,
+        "locale": "en",
         "chromium_arg": "--no-sandbox,--disable-dev-shm-usage,--window-size=1280,720",
     }
-    # 如果是 Linux 系统且没有检测到外部提供 DISPLAY 环境变量，则开启 SeleniumBase 内置的 xvfb 虚拟显示器支持
-    if sys.platform.startswith("linux") and not os.environ.get("DISPLAY"):
-        sb_options["xvfb"] = True
     if WARP_PROXY:
         sb_options["proxy"] = WARP_PROXY
     with SB(**sb_options) as sb:

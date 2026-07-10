@@ -70,10 +70,10 @@ jobs:
       - name: Install System Dependencies for SeleniumBase
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-tk python3-dev scrot xvfb
-          pip install seleniumbase pyautogui pyvirtualdisplay
-          seleniumbase install chrome
-          seleniumbase install chromedriver
+          sudo apt-get install -y xvfb x11-xkb-utils xfonts-100dpi xfonts-75dpi xfonts-scalable xfonts-cyrillic
+          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo apt install -y ./google-chrome-stable_current_amd64.deb
+          pip install seleniumbase
 
       - name: Run Auto-Renew Script
         env:
