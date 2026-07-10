@@ -12,7 +12,8 @@ permissions:
 
 jobs:
   renew:
-    runs-on: ubuntu-latest
+    # runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Checkout Repository
@@ -79,7 +80,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          WARP_PROXY: "http://127.0.0.1:7897"
+          # WARP_PROXY: "http://127.0.0.1:7897"
         run: |
           python main.py
 
