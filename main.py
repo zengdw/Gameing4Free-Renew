@@ -252,7 +252,7 @@ def main():
         url = "https://gaming4free.net/servers/my-game"
         print(f"正在打开网页: {url}")
         # uc_open_with_reconnect 在遭遇初始质询时会有更好的重连与保活表现
-        sb.uc_open_with_reconnect(url, reconnect_time=4)
+        sb.activate_cdp_mode(url)
 
         # 检查并处理打开页面后的隐私同意弹框
         handle_consent_popup(sb)
