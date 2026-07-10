@@ -239,8 +239,6 @@ def main():
     # 使用 SeleniumBase UC (Undetected) 模式
     sb_options = {
         "uc": True,
-        "test": True,
-        "headed": True,
         "xvfb": True,
         "incognito": True,
         "locale": "en",
