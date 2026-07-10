@@ -244,7 +244,6 @@ def main():
         "xvfb": True,
         "incognito": True,
         "locale": "en",
-        "chromium_arg": "--no-sandbox,--disable-dev-shm-usage,--window-size=1280,720",
     }
     if WARP_PROXY:
         sb_options["proxy"] = WARP_PROXY
