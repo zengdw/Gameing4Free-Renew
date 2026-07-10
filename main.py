@@ -290,6 +290,7 @@ def main():
                 pass
 
             print("未检测到有效 Token，尝试点击验证码 iframe 触发验证...")
+            handle_consent_popup(sb)
             close_other_popups_and_ads(sb)
             try:
                 sb.sleep(1)
