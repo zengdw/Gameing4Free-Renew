@@ -245,7 +245,7 @@ def main():
     }
     if WARP_PROXY:
         sb_options["proxy"] = WARP_PROXY
-    user_data_dir = tempfile.mkdtemp(prefix=f"wisp_usr_{idx}_")
+    user_data_dir = tempfile.mkdtemp(prefix=f"game_usr_")
     with SB(
         uc=True,
         test=True,
