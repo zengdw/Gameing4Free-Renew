@@ -1,4 +1,4 @@
-import os, platform, sys, time
+import os, platform, sys, time, tempfile
 import urllib.request
 import urllib.parse
 from seleniumbase import SB
@@ -245,7 +245,16 @@ def main():
     }
     if WARP_PROXY:
         sb_options["proxy"] = WARP_PROXY
-    with SB(**sb_options) as sb:
+    user_data_dir = tempfile.mkdtemp(prefix=f"wisp_usr_{idx}_")
+    with SB(
+        uc=True,
+        test=True,
+        locale="en",
+        headed=False,
+        user_data_dir=user_data_dir,
+        proxy=WARP_PROXY,
+        chromium_arg="--disable-blink-features=AutomationControlled",
+    ) as sb:
         url = "https://gaming4free.net/servers/my-game"
         print(f"正在打开网页: {url}")
         # uc_open_with_reconnect 在遭遇初始质询时会有更好的重连与保活表现

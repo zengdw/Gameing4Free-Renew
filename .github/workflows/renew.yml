@@ -13,7 +13,7 @@ permissions:
 jobs:
   renew:
     # runs-on: ubuntu-latest
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
@@ -71,10 +71,10 @@ jobs:
       - name: Install System Dependencies for SeleniumBase
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb x11-xkb-utils xfonts-100dpi xfonts-75dpi xfonts-scalable xfonts-cyrillic
+          sudo apt-get install -y xvfb x11-xkb-utils xfonts-100dpi xfonts-75dpi xfonts-scalable xfonts-cyrillic ffmpeg unzip curl gnupg
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo apt install -y ./google-chrome-stable_current_amd64.deb
-          pip install seleniumbase
+          pip install seleniumbase pyvirtualdisplay requests
 
       - name: Run Auto-Renew Script
         env:
