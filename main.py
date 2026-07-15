@@ -54,7 +54,9 @@ def send_telegram_photo(photo_path, caption=None):
 
     if not os.path.exists(photo_path):
         print(f"【错误】图片文件不存在: {photo_path}")
-        return False
+        print("发送 Telegram 截图失败，降级发送普通文本通知...")
+        send_telegram_notification(caption)
+        return
 
     url = f"https://api.telegram.org/bot{token}/sendPhoto"
     boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW"
@@ -102,6 +104,8 @@ def send_telegram_photo(photo_path, caption=None):
             return True
     except Exception as e:
         print(f"【错误】发送 Telegram 图片通知失败: {e}")
+        print("发送 Telegram 截图失败，降级发送普通文本通知...")
+        send_telegram_notification(caption)
         return False
 
 
@@ -232,19 +236,27 @@ def close_other_popups_and_ads(sb):
         print(f"清理广告/弹窗时执行 JavaScript 出错: {e}")
 
 
+def get_screenshot_and_send_telegram(sb, caption_msg=None):
+    screenshot_path = "captcha_timeout.png"
+    try:
+        print("正在截取当前页面截图...")
+        sb.save_screenshot(screenshot_path)
+        print(f"截图已保存到 {screenshot_path}，正在发送到 Telegram...")
+        send_telegram_photo(screenshot_path, caption=caption_msg)
+    finally:
+        if os.path.exists(screenshot_path):
+            try:
+                os.remove(screenshot_path)
+                print("临时截图文件已清理。")
+            except Exception as ce:
+                print(f"清理临时截图文件失败: {ce}")
+
+
 def main():
     load_env()
     WARP_PROXY = os.environ.get("WARP_PROXY", "")
 
     # 使用 SeleniumBase UC (Undetected) 模式
-    sb_options = {
-        "uc": True,
-        "xvfb": True,
-        "incognito": True,
-        "locale": "en",
-    }
-    if WARP_PROXY:
-        sb_options["proxy"] = WARP_PROXY
     user_data_dir = tempfile.mkdtemp(prefix=f"game_usr_")
     with SB(
         uc=True,
@@ -260,77 +272,69 @@ def main():
         # uc_open_with_reconnect 在遭遇初始质询时会有更好的重连与保活表现
         sb.activate_cdp_mode(url)
 
-        # 检查并处理打开页面后的隐私同意弹框
-        handle_consent_popup(sb)
-        close_other_popups_and_ads(sb)
-
-        # 获取 div#sd-timer 的文本内容
-        print("正在等待获取 div#sd-timer ...")
-        sb.wait_for_element("div#sd-timer", timeout=15)
-        before_time_text = sb.get_text("div#sd-timer").strip()
-        print(f"续期前时间: {before_time_text}")
-
-        # 点击按钮 button#sd-vote-btn
-        print("点击续期按钮 button#sd-vote-btn")
-        sb.uc_click("button#sd-vote-btn")
-
-        # 检查并处理点击续期按钮后的隐私同意弹框
-        handle_consent_popup(sb)
-        close_other_popups_and_ads(sb)
-
-        # 等待弹出框中的 div#ts-widget 加载
-        print("等待验证码区域 div#ts-widget 出现...")
-        sb.wait_for_element("div#ts-widget", timeout=15)
-
-        last_check = time.time()
-        index = 0
-        success = False
-        while index < 10:
+        try:
+            # 检查并处理打开页面后的隐私同意弹框
             handle_consent_popup(sb)
             close_other_popups_and_ads(sb)
-            try:
-                token_val = sb.execute_script(
-                    "return (document.querySelector(\"[name='cf-turnstile-response']\") || {}).value;"
-                )
-                if token_val and len(token_val.strip()) > 0:
-                    print(f"验证成功！已生成 Response Token: {token_val[:35]}...")
-                    success = True
-                    break
-            except Exception:
-                pass
 
-            if time.time() - last_check > 30:
-                print("未检测到有效 Token，尝试点击验证码 iframe 触发验证...")
+            # 获取 div#sd-timer 的文本内容
+            print("正在等待获取 div#sd-timer ...")
+            sb.wait_for_element("div#sd-timer", timeout=15)
+            before_time_text = sb.get_text("div#sd-timer").strip()
+            print(f"续期前时间: {before_time_text}")
+
+            # 点击按钮 button#sd-vote-btn
+            print("点击续期按钮 button#sd-vote-btn")
+            sb.uc_click("button#sd-vote-btn")
+
+            # 检查并处理点击续期按钮后的隐私同意弹框
+            handle_consent_popup(sb)
+            close_other_popups_and_ads(sb)
+
+            # 等待弹出框中的 div#ts-widget 加载
+            print("等待验证码区域 div#ts-widget 出现...")
+            sb.wait_for_element("div#ts-widget", timeout=15)
+
+            last_check = time.time()
+            index = 0
+            success = False
+            while index < 10:
+                handle_consent_popup(sb)
+                close_other_popups_and_ads(sb)
                 try:
-                    sb.uc_gui_click_captcha()
-                    index += 1
-                    last_check = time.time()
-                except Exception as e:
-                    print(f"点击验证码失败: {e}")
-            sb.sleep(2)
+                    token_val = sb.execute_script(
+                        "return (document.querySelector(\"[name='cf-turnstile-response']\") || {}).value;"
+                    )
+                    if token_val and len(token_val.strip()) > 0:
+                        print(f"验证成功！已生成 Response Token: {token_val[:35]}...")
+                        success = True
+                        break
+                except Exception:
+                    pass
+
+                if time.time() - last_check > 30:
+                    print("未检测到有效 Token，尝试点击验证码 iframe 触发验证...")
+                    try:
+                        sb.uc_gui_click_captcha()
+                        index += 1
+                        last_check = time.time()
+                    except Exception as e:
+                        print(f"点击验证码失败: {e}")
+                sb.sleep(2)
+        except Exception as e:
+            print(f"【错误】自动续期过程中发生错误: {e}")
+            get_screenshot_and_send_telegram(
+                sb,
+                f"Gameing4Free 自动续期：\n【错误】自动续期过程中发生错误: {e}",
+            )
+            return
 
         if not success:
             print("【错误】未能在规定时间内生成验证码 Token，请尝试手动处理。")
-            screenshot_path = "captcha_timeout.png"
-            caption_msg = "Gameing4Free 自动续期：\n【错误】未能在规定时间内生成验证码 Token，请尝试手动处理。"
-            try:
-                print("正在截取当前页面截图...")
-                sb.save_screenshot(screenshot_path)
-                print(f"截图已保存到 {screenshot_path}，正在发送到 Telegram...")
-                sent = send_telegram_photo(screenshot_path, caption=caption_msg)
-                if not sent:
-                    print("发送 Telegram 截图失败，降级发送普通文本通知...")
-                    send_telegram_notification(caption_msg)
-            except Exception as e:
-                print(f"【错误】截图或发送截图失败: {e}，将降级发送普通文本通知。")
-                send_telegram_notification(caption_msg)
-            finally:
-                if os.path.exists(screenshot_path):
-                    try:
-                        os.remove(screenshot_path)
-                        print("临时截图文件已清理。")
-                    except Exception as ce:
-                        print(f"清理临时截图文件失败: {ce}")
+            get_screenshot_and_send_telegram(
+                sb,
+                "Gameing4Free 自动续期：\n【错误】未能在规定时间内生成验证码 Token，请尝试手动处理。",
+            )
             return
 
         print("【成功】检测到验证码已通过，准备提交。")
