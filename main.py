@@ -264,7 +264,7 @@ def main():
         locale="en",
         headed=False,
         user_data_dir=user_data_dir,
-        proxy=WARP_PROXY,
+        # proxy=WARP_PROXY,
         chromium_arg="--disable-blink-features=AutomationControlled",
     ) as sb:
         url = "https://gaming4free.net/servers/my-game"
