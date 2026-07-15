@@ -80,7 +80,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          # WARP_PROXY: "http://127.0.0.1:7897"
+          WARP_PROXY: "socks5://nfenwxbc:nne2y1sn3y0b@38.154.185.97:6370"
         run: |
           python main.py
 
