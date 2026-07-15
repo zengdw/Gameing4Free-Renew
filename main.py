@@ -1,4 +1,4 @@
-import os, platform, sys, time, tempfile
+import os, platform, sys, time, tempfile, subprocess
 import urllib.request
 import urllib.parse
 from seleniumbase import SB
@@ -252,130 +252,196 @@ def get_screenshot_and_send_telegram(sb, caption_msg=None):
                 print(f"清理临时截图文件失败: {ce}")
 
 
+def restart_warp():
+    """重启 Cloudflare WARP 并注册新客户端以更换 IP 代理"""
+    print("【WARP】正在断开并注销旧的 WARP 客户端以更换 IP...")
+    try:
+        # 断开并注销
+        subprocess.run(["sudo", "warp-cli", "--accept-tos", "disconnect"], check=False)
+        subprocess.run(["sudo", "warp-cli", "--accept-tos", "registration", "delete"], check=False)
+        time.sleep(1)
+        
+        # 重启 warp-svc 服务
+        subprocess.run(["sudo", "systemctl", "restart", "warp-svc"], check=False)
+        time.sleep(2)
+
+        # 重新注册并配置
+        res = subprocess.run(["sudo", "warp-cli", "--accept-tos", "registration", "new"], check=False)
+        if res.returncode != 0:
+            subprocess.run(["sudo", "warp-cli", "--accept-tos", "register"], check=False)
+            
+        res = subprocess.run(["sudo", "warp-cli", "--accept-tos", "set-mode", "proxy"], check=False)
+        if res.returncode != 0:
+            subprocess.run(["sudo", "warp-cli", "--accept-tos", "mode", "proxy"], check=False)
+            
+        subprocess.run(["sudo", "warp-cli", "--accept-tos", "connect"], check=False)
+        
+        print("【WARP】等待代理就绪并验证 IP...")
+        for _ in range(10):
+            test_res = subprocess.run(
+                ["curl", "-s", "--proxy", "socks5h://127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=5,
+                text=True
+            )
+            if "warp=on" in test_res.stdout:
+                print("【WARP】代理已成功连接并激活！")
+                for line in test_res.stdout.split("\n"):
+                    if line.startswith("ip="):
+                        print(f"【WARP】当前外网 IP: {line.split('=')[1]}")
+                break
+            time.sleep(2)
+    except Exception as e:
+        print(f"【WARP】重启及更换 IP 失败: {e}")
+
+
 def main():
     load_env()
     WARP_PROXY = os.environ.get("WARP_PROXY", "")
 
-    # 使用 SeleniumBase UC (Undetected) 模式
-    user_data_dir = tempfile.mkdtemp(prefix=f"game_usr_")
-    with SB(
-        uc=True,
-        test=True,
-        locale="en",
-        headed=False,
-        user_data_dir=user_data_dir,
-        # proxy=WARP_PROXY,
-        chromium_arg="--disable-blink-features=AutomationControlled",
-    ) as sb:
-        url = "https://gaming4free.net/servers/my-game"
-        print(f"正在打开网页: {url}")
-        # uc_open_with_reconnect 在遭遇初始质询时会有更好的重连与保活表现
-        sb.activate_cdp_mode(url)
+    max_retries = 3
+    for attempt in range(max_retries + 1):
+        if attempt > 0:
+            print(f"\n【重试】正在进行第 {attempt} 次重试，重启 WARP 更换 IP...")
+            restart_warp()
+            time.sleep(2)
 
+        success_all = False
+        user_data_dir = tempfile.mkdtemp(prefix=f"game_usr_")
         try:
-            # 检查并处理打开页面后的隐私同意弹框
-            handle_consent_popup(sb)
-            close_other_popups_and_ads(sb)
+            with SB(
+                uc=True,
+                test=True,
+                locale="en",
+                headed=False,
+                user_data_dir=user_data_dir,
+                proxy=WARP_PROXY,
+                chromium_arg="--disable-blink-features=AutomationControlled",
+            ) as sb:
+                url = "https://gaming4free.net/servers/my-game"
+                print(f"正在打开网页: {url}")
+                # uc_open_with_reconnect 在遭遇初始质询时会有更好的重连与保活表现
+                sb.activate_cdp_mode(url)
 
-            # 获取 div#sd-timer 的文本内容
-            print("正在等待获取 div#sd-timer ...")
-            sb.wait_for_element("div#sd-timer", timeout=15)
-            before_time_text = sb.get_text("div#sd-timer").strip()
-            print(f"续期前时间: {before_time_text}")
-
-            # 点击按钮 button#sd-vote-btn
-            print("点击续期按钮 button#sd-vote-btn")
-            sb.uc_click("button#sd-vote-btn")
-
-            # 检查并处理点击续期按钮后的隐私同意弹框
-            handle_consent_popup(sb)
-            close_other_popups_and_ads(sb)
-
-            # 等待弹出框中的 div#ts-widget 加载
-            print("等待验证码区域 div#ts-widget 出现...")
-            sb.wait_for_element("div#ts-widget", timeout=15)
-
-            last_check = time.time()
-            index = 0
-            success = False
-            while index < 10:
-                handle_consent_popup(sb)
-                close_other_popups_and_ads(sb)
                 try:
-                    token_val = sb.execute_script(
-                        "return (document.querySelector(\"[name='cf-turnstile-response']\") || {}).value;"
-                    )
-                    if token_val and len(token_val.strip()) > 0:
-                        print(f"验证成功！已生成 Response Token: {token_val[:35]}...")
-                        success = True
-                        break
-                except Exception:
-                    pass
+                    # 检查并处理打开页面后的隐私同意弹框
+                    handle_consent_popup(sb)
+                    close_other_popups_and_ads(sb)
 
-                if time.time() - last_check > 30:
-                    print("未检测到有效 Token，尝试点击验证码 iframe 触发验证...")
-                    try:
-                        sb.uc_gui_click_captcha()
-                        index += 1
-                        last_check = time.time()
-                    except Exception as e:
-                        print(f"点击验证码失败: {e}")
-                sb.sleep(2)
-        except Exception as e:
-            print(f"【错误】自动续期过程中发生错误: {e}")
-            get_screenshot_and_send_telegram(
-                sb,
-                f"Gameing4Free 自动续期：\n【错误】自动续期过程中发生错误: {e}",
-            )
-            return
+                    # 获取 div#sd-timer 的文本内容
+                    print("正在等待获取 div#sd-timer ...")
+                    sb.wait_for_element("div#sd-timer", timeout=15)
+                    before_time_text = sb.get_text("div#sd-timer").strip()
+                    print(f"续期前时间: {before_time_text}")
 
-        if not success:
-            print("【错误】未能在规定时间内生成验证码 Token，请尝试手动处理。")
-            get_screenshot_and_send_telegram(
-                sb,
-                "Gameing4Free 自动续期：\n【错误】未能在规定时间内生成验证码 Token，请尝试手动处理。",
-            )
-            return
+                    # 点击按钮 button#sd-vote-btn
+                    print("点击续期按钮 button#sd-vote-btn")
+                    sb.uc_click("button#sd-vote-btn")
 
-        print("【成功】检测到验证码已通过，准备提交。")
+                    # 检查并处理点击续期按钮后的隐私同意弹框
+                    handle_consent_popup(sb)
+                    close_other_popups_and_ads(sb)
 
-        # 点击提交按钮 button#vm-submit
-        print("点击提交按钮 button#vm-submit")
-        sb.click("button#vm-submit")
+                    # 等待弹出框中的 div#ts-widget 加载
+                    print("等待验证码区域 div#ts-widget 出现...")
+                    sb.wait_for_element("div#ts-widget", timeout=15)
 
-        # 取消固定的 5 秒等待，通过轮询与刷新等待有效的时间格式出现
-        print("正在等待续期生效并获取新时间...")
-        after_time_text = "—"
-        success_update = False
+                    last_check = time.time()
+                    index = 0
+                    success = False
+                    while index < 10:
+                        handle_consent_popup(sb)
+                        close_other_popups_and_ads(sb)
+                        try:
+                            token_val = sb.execute_script(
+                                "return (document.querySelector(\"[name='cf-turnstile-response']\") || {}).value;"
+                            )
+                            if token_val and len(token_val.strip()) > 0:
+                                print(f"验证成功！已生成 Response Token: {token_val[:35]}...")
+                                success = True
+                                break
+                        except Exception:
+                            pass
 
-        for check_attempt in range(10):
-            sb.sleep(1.5)  # 每次循环稍微间隔
-            try:
-                sb.refresh()
-                sb.wait_for_element("div#sd-timer", timeout=8)
-                sb.sleep(5)
-                current_time = sb.get_text("div#sd-timer").strip()
-                if ":" in current_time and current_time != "—":
-                    after_time_text = current_time
-                    success_update = True
-                    break
-                else:
-                    print(
-                        f"【第 {check_attempt + 1}/10 次尝试】获取到的时间值为 '{current_time}'，尚未完成加载，继续刷新中..."
-                    )
-            except Exception as e:
-                print(f"刷新或获取时间出错: {e}")
+                        if time.time() - last_check > 30:
+                            print("未检测到有效 Token，尝试点击验证码 iframe 触发验证...")
+                            try:
+                                sb.uc_gui_click_captcha()
+                                index += 1
+                                last_check = time.time()
+                            except Exception as e:
+                                print(f"点击验证码失败: {e}")
+                        sb.sleep(2)
 
-        if not success_update:
-            print("【警告】未能成功在规定时间内获取到有效的续期后时间格式。")
+                    if not success:
+                        print("【错误】未能在规定时间内生成验证码 Token，准备进行重试。")
+                        raise Exception("未能在规定时间内生成验证码 Token")
 
-        print(f"续期后时间: {after_time_text}")
+                    print("【成功】检测到验证码已通过，准备提交。")
 
-        # 发送 Telegram 成功通知
-        msg = f"""Gameing4Free 自动续期：
+                    # 点击提交按钮 button#vm-submit
+                    print("点击提交按钮 button#vm-submit")
+                    sb.click("button#vm-submit")
+
+                    # 取消固定的 5 秒等待，通过轮询与刷新等待有效的时间格式出现
+                    print("正在等待续期生效并获取新时间...")
+                    after_time_text = "—"
+                    success_update = False
+
+                    for check_attempt in range(10):
+                        sb.sleep(1.5)  # 每次循环稍微间隔
+                        try:
+                            sb.refresh()
+                            sb.wait_for_element("div#sd-timer", timeout=8)
+                            sb.sleep(5)
+                            current_time = sb.get_text("div#sd-timer").strip()
+                            if ":" in current_time and current_time != "—":
+                                after_time_text = current_time
+                                success_update = True
+                                break
+                            else:
+                                print(
+                                    f"【第 {check_attempt + 1}/10 次尝试】获取到的时间值为 '{current_time}'，尚未完成加载，继续刷新中..."
+                                )
+                        except Exception as e:
+                            print(f"刷新或获取时间出错: {e}")
+
+                    if not success_update:
+                        print("【警告】未能成功在规定时间内获取到有效的续期后时间格式。")
+
+                    print(f"续期后时间: {after_time_text}")
+
+                    # 发送 Telegram 成功通知
+                    msg = f"""Gameing4Free 自动续期：
     续期前时间：{before_time_text}
     续期后时间：{after_time_text}"""
-        send_telegram_notification(msg)
+                    send_telegram_notification(msg)
+                    success_all = True
+
+                except Exception as e:
+                    print(f"【错误】自动续期过程中发生错误 (Attempt {attempt}/{max_retries}): {e}")
+                    if attempt >= max_retries:
+                        get_screenshot_and_send_telegram(
+                            sb,
+                            f"Gameing4Free 自动续期（已试过所有重试）：\n【错误】发生错误: {e}",
+                        )
+                    raise e
+        except Exception:
+            pass
+        finally:
+            try:
+                import shutil
+                if os.path.exists(user_data_dir):
+                    shutil.rmtree(user_data_dir)
+            except Exception:
+                pass
+
+        if success_all:
+            break
+    else:
+        print("【错误】所有 3 次重试均已耗尽，任务失败。")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

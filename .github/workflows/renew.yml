@@ -24,44 +24,32 @@ jobs:
         with:
           python-version: '3.11'
       
-      - name: Install and Start Xray
-        env:
-          XRAY_CONFIG: ${{ secrets.XRAY_CONFIG }}
+      - name: Install and Start Cloudflare WARP
         run: |
-          echo "Downloading Xray..."
-          curl -Lo xray.zip https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip
-          unzip xray.zip -d xray_temp
-          sudo mv xray_temp/xray /usr/local/bin/
-          # 将解压出来的 geoip.dat 和 geosite.dat 资源文件一并移动到运行目录中，供 xray 路由模块正常读取
-          sudo mv xray_temp/*.dat /usr/local/bin/
-          rm -rf xray.zip xray_temp
+          echo "Installing Cloudflare WARP..."
+          curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
+          sudo apt-get update
+          sudo apt-get install -y cloudflare-warp
 
-          echo $(xray version)
+          echo "Starting Cloudflare WARP service..."
+          sudo systemctl start warp-svc
+          sleep 2
 
-          mkdir -p ~/.config/xray
-          if [ -z "$XRAY_CONFIG" ]; then
-            echo "ERROR: Please set the XRAY_CONFIG secret in your repository settings."
-            exit 1
-          fi
-          echo "$XRAY_CONFIG" > ~/.config/xray/config.json
+          echo "Registering WARP client..."
+          sudo warp-cli --accept-tos registration new || sudo warp-cli --accept-tos register
 
-          echo "Starting Xray in background..."
-          sudo xray run -c ~/.config/xray/config.json > xray.log 2>&1 &
-          
-          sleep 3
-          if pgrep -x "xray" > /dev/null; then
-            echo "Xray started successfully!"
-          else
-            echo "Xray failed to start! Log content:"
-            cat xray.log
-            exit 1
-          fi
+          echo "Setting WARP mode to proxy..."
+          sudo warp-cli --accept-tos set-mode proxy || sudo warp-cli --accept-tos mode proxy
+
+          echo "Connecting to WARP..."
+          sudo warp-cli --accept-tos connect
 
           echo "Verifying proxy connection..."
-          for i in {1..10}; do
-            if curl -s --proxy http://127.0.0.1:7897 https://www.cloudflare.com/cdn-cgi/trace > /dev/null; then
-              echo "Proxy is working!"
-              curl --proxy http://127.0.0.1:7897 https://www.cloudflare.com/cdn-cgi/trace
+          for i in {1..15}; do
+            if curl -s --proxy socks5h://127.0.0.1:40000 https://www.cloudflare.com/cdn-cgi/trace | grep -q "warp=on"; then
+              echo "Proxy is working and WARP is active!"
+              curl --proxy socks5h://127.0.0.1:40000 https://www.cloudflare.com/cdn-cgi/trace
               break
             fi
             echo "Waiting for proxy to respond..."
@@ -80,7 +68,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          WARP_PROXY: "http://127.0.0.1:7897"
+          WARP_PROXY: "socks5://127.0.0.1:40000"
         run: |
           python main.py
 
