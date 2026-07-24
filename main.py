@@ -258,32 +258,48 @@ def restart_warp():
     try:
         # 断开并注销
         subprocess.run(["sudo", "warp-cli", "--accept-tos", "disconnect"], check=False)
-        subprocess.run(["sudo", "warp-cli", "--accept-tos", "registration", "delete"], check=False)
+        subprocess.run(
+            ["sudo", "warp-cli", "--accept-tos", "registration", "delete"], check=False
+        )
         time.sleep(1)
-        
+
         # 重启 warp-svc 服务
         subprocess.run(["sudo", "systemctl", "restart", "warp-svc"], check=False)
         time.sleep(2)
 
         # 重新注册并配置
-        res = subprocess.run(["sudo", "warp-cli", "--accept-tos", "registration", "new"], check=False)
+        res = subprocess.run(
+            ["sudo", "warp-cli", "--accept-tos", "registration", "new"], check=False
+        )
         if res.returncode != 0:
-            subprocess.run(["sudo", "warp-cli", "--accept-tos", "register"], check=False)
-            
-        res = subprocess.run(["sudo", "warp-cli", "--accept-tos", "set-mode", "proxy"], check=False)
+            subprocess.run(
+                ["sudo", "warp-cli", "--accept-tos", "register"], check=False
+            )
+
+        res = subprocess.run(
+            ["sudo", "warp-cli", "--accept-tos", "set-mode", "proxy"], check=False
+        )
         if res.returncode != 0:
-            subprocess.run(["sudo", "warp-cli", "--accept-tos", "mode", "proxy"], check=False)
-            
+            subprocess.run(
+                ["sudo", "warp-cli", "--accept-tos", "mode", "proxy"], check=False
+            )
+
         subprocess.run(["sudo", "warp-cli", "--accept-tos", "connect"], check=False)
-        
+
         print("【WARP】等待代理就绪并验证 IP...")
         for _ in range(10):
             test_res = subprocess.run(
-                ["curl", "-s", "--proxy", "socks5h://127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace"],
+                [
+                    "curl",
+                    "-s",
+                    "--proxy",
+                    "socks5h://127.0.0.1:40000",
+                    "https://www.cloudflare.com/cdn-cgi/trace",
+                ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 timeout=5,
-                text=True
+                text=True,
             )
             if "warp=on" in test_res.stdout:
                 print("【WARP】代理已成功连接并激活！")
@@ -358,14 +374,18 @@ def main():
                                 "return (document.querySelector(\"[name='cf-turnstile-response']\") || {}).value;"
                             )
                             if token_val and len(token_val.strip()) > 0:
-                                print(f"验证成功！已生成 Response Token: {token_val[:35]}...")
+                                print(
+                                    f"验证成功！已生成 Response Token: {token_val[:35]}..."
+                                )
                                 success = True
                                 break
                         except Exception:
                             pass
 
                         if time.time() - last_check > 30:
-                            print("未检测到有效 Token，尝试点击验证码 iframe 触发验证...")
+                            print(
+                                "未检测到有效 Token，尝试点击验证码 iframe 触发验证..."
+                            )
                             try:
                                 sb.uc_gui_click_captcha()
                                 index += 1
@@ -375,7 +395,9 @@ def main():
                         sb.sleep(2)
 
                     if not success:
-                        print("【错误】未能在规定时间内生成验证码 Token，准备进行重试。")
+                        print(
+                            "【错误】未能在规定时间内生成验证码 Token，准备进行重试。"
+                        )
                         raise Exception("未能在规定时间内生成验证码 Token")
 
                     print("【成功】检测到验证码已通过，准备提交。")
@@ -408,7 +430,9 @@ def main():
                             print(f"刷新或获取时间出错: {e}")
 
                     if not success_update:
-                        print("【警告】未能成功在规定时间内获取到有效的续期后时间格式。")
+                        print(
+                            "【警告】未能成功在规定时间内获取到有效的续期后时间格式。"
+                        )
 
                     print(f"续期后时间: {after_time_text}")
 
@@ -420,7 +444,9 @@ def main():
                     success_all = True
 
                 except Exception as e:
-                    print(f"【错误】自动续期过程中发生错误 (Attempt {attempt}/{max_retries}): {e}")
+                    print(
+                        f"【错误】自动续期过程中发生错误 (Attempt {attempt}/{max_retries}): {e}"
+                    )
                     if attempt >= max_retries:
                         get_screenshot_and_send_telegram(
                             sb,
@@ -432,6 +458,7 @@ def main():
         finally:
             try:
                 import shutil
+
                 if os.path.exists(user_data_dir):
                     shutil.rmtree(user_data_dir)
             except Exception:
@@ -441,7 +468,7 @@ def main():
             break
     else:
         print("【错误】所有 3 次重试均已耗尽，任务失败。")
-        sys.exit(1)
+        # sys.exit(1)
 
 
 if __name__ == "__main__":
